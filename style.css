@@ -1,0 +1,164 @@
+:root{
+  --ink:#26324A;
+  --paper:#F7F4EC;
+  --paper-dark:#EFEAE0;
+  --line:#D8D0BE;
+  --accent:#2B6E6E;
+  --hanko:#B5453D;
+  --muted:#8A8272;
+  --muted2:#9A8F7A;
+  --warn:#B5453D;
+}
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Zen Kaku Gothic New', sans-serif;
+  padding-bottom:60px;
+}
+select, textarea, input, button{ font-family:'Zen Kaku Gothic New', sans-serif; }
+textarea{ resize:vertical; }
+::placeholder{ color:var(--muted2); }
+button{ cursor:pointer; }
+
+.clamp2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+header{ padding:20px 20px 14px; border-bottom:1px solid var(--line); }
+.header-inner{ max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.brand{ display:flex; align-items:center; gap:12px; }
+.brand h1{ font-family:'Shippori Mincho', serif; font-size:24px; font-weight:700; margin:0; letter-spacing:1px; }
+.brand .sub{ font-size:12px; color:#7A7263; margin-top:2px; }
+
+.user-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.save-status{ font-size:11.5px; color:var(--muted); }
+.save-status.dirty{ color:var(--warn); font-weight:700; }
+
+nav.tabs{ max-width:1100px; margin:16px auto 0; display:flex; gap:8px; flex-wrap:wrap; }
+.tab-btn{
+  display:flex; align-items:center; gap:6px; padding:9px 18px;
+  border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:1px solid var(--line);
+  background:var(--paper-dark); color:#7A7263; font-weight:500; margin-bottom:-1px; font-size:14px;
+}
+.tab-btn.active{ background:#fff; color:var(--accent); font-weight:700; border-bottom:2px solid #fff; }
+
+main{ max-width:1100px; margin:0 auto; padding:24px 20px; display:flex; flex-direction:column; gap:20px; }
+
+.card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px; }
+.section-title{ font-family:'Shippori Mincho', serif; font-size:17px; font-weight:700; margin:0 0 6px; }
+.hint{ font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.6; }
+
+.input{ border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; color:var(--ink); width:100%; }
+.select{ width:100%; border:1px solid var(--line); border-radius:6px; padding:4px 6px; font-size:13px; color:var(--ink); background:#fff; }
+.textarea{ width:100%; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:12.5px; color:var(--ink); line-height:1.5; }
+
+.btn{ display:inline-flex; align-items:center; gap:4px; border-radius:8px; padding:8px 16px; font-size:14px; font-weight:600; white-space:nowrap; border:none; }
+.btn-primary{ background:var(--accent); color:#fff; }
+.btn-outline{ background:#fff; color:var(--accent); border:1px solid var(--accent); }
+.btn-muted{ background:#fff; color:var(--muted2); border:1px solid var(--line); }
+.nav-btn{ width:32px; height:32px; border-radius:50%; border:1px solid var(--line); background:#fff; display:inline-flex; align-items:center; justify-content:center; color:var(--ink); font-size:15px; }
+
+table.grid{ border-collapse:collapse; width:100%; }
+table.grid th{ border:1px solid var(--line); background:var(--paper-dark); padding:8px 6px; font-size:13px; font-weight:700; }
+table.grid td{ border:1px solid var(--line); padding:8px; }
+td.row-label{ text-align:center; font-weight:700; color:#7A7263; background:#fff; font-size:13px; }
+tr.break td{ background:var(--paper-dark); color:var(--muted2); text-align:center; font-size:12px; }
+
+.badge-circle{
+  display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; padding:0 3px;
+  border-radius:50%; background:var(--accent); color:#fff; font-size:13px; font-weight:700;
+}
+.badge-circle.skip{ background:#E4DFD2; color:var(--muted2); }
+
+.obj-preview{ font-size:11px; background:var(--paper-dark); border:1px dashed var(--line); border-radius:6px; padding:5px 7px; min-height:30px; color:var(--muted2); }
+.obj-preview.has-text{ color:var(--ink); }
+
+.hanko-btn{ display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; }
+.hanko-circle{
+  width:46px; height:46px; border-radius:50%; border:2px solid var(--hanko); display:flex; align-items:center; justify-content:center;
+  font-family:'Shippori Mincho', serif; font-weight:700; font-size:15px; color:var(--hanko); background:transparent;
+}
+.hanko-circle.active{ background:var(--hanko); color:#fff; }
+.hanko-label{ font-size:11px; color:var(--ink); letter-spacing:1px; }
+
+.chip{ display:flex; align-items:center; gap:6px; background:var(--paper-dark); border:1px solid var(--line); border-radius:20px; padding:6px 6px 6px 14px; font-size:14px; }
+.chip button{ border:none; background:none; display:flex; color:var(--muted2); padding:2px; }
+
+.pill-btn{ padding:7px 16px; border-radius:20px; border:1px solid var(--line); background:#fff; color:var(--ink); font-weight:500; font-size:13px; }
+.pill-btn.active{ border-color:var(--accent); background:var(--accent); color:#fff; font-weight:700; }
+
+.obj-row{ display:flex; align-items:flex-start; gap:12px; border:1px solid var(--line); border-radius:10px; padding:12px; background:#fff; }
+.obj-row.future{ background:var(--paper-dark); }
+.obj-num{ min-width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+.obj-num.future{ background:#D8D0BE; }
+
+.staff-line{ display:block; }
+
+/* 印刷プレビュー（A4縦・1枚／様式に準拠） */
+.print-toolbar{ width:100%; max-width:900px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.print-page{
+  width:210mm; min-height:297mm; background:#fff; padding:10mm 9mm; box-sizing:border-box;
+  box-shadow:0 0 14px rgba(0,0,0,0.15); color:var(--ink); font-family:'Zen Kaku Gothic New', sans-serif; margin:0 auto;
+}
+.print-page table{ border-collapse:collapse; width:100%; table-layout:fixed; }
+.print-page th, .print-page td{ border:1px solid #666; }
+.print-th{ background:#F0EDE4; font-size:9.5px; padding:1.2mm 0.5mm; font-weight:700; text-align:center; }
+.print-period-cell{ padding:1mm 1.3mm; vertical-align:top; height:25mm; overflow:hidden; }
+.print-break-cell{ padding:0.6mm 1.3mm; vertical-align:middle; height:7mm; overflow:hidden; background:#FAFAF7; }
+.print-break-label{ font-size:7px; color:#777; font-weight:700; }
+.print-break-note{ font-size:8px; color:#333; }
+.print-row-label{ text-align:center; font-size:10px; font-weight:700; color:#555; vertical-align:middle !important; }
+.print-lesson-line1{ font-size:8.6px; font-weight:700; margin-bottom:0.6mm; }
+.print-lesson-line2{ font-size:8.4px; color:#333; margin-bottom:0.6mm; }
+.print-lesson-line3{ font-size:8.4px; }
+.print-badge{ display:inline-block; padding:0 1mm; border-radius:2mm; background:#eee; color:#555; font-size:7.5px; margin-left:2px; }
+.print-badge.skip{ background:#ccc; }
+.print-goal-box{ border:1px solid #666; border-radius:2px; padding:2mm; }
+.print-hanko-box{ width:15mm; height:15mm; border:1px solid #666; }
+
+@media print {
+  html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+  body * { visibility:hidden; }
+  .print-page, .print-page * { visibility:visible !important; }
+  .print-page {
+    position:absolute !important; top:0 !important; left:0 !important;
+    width:210mm !important; min-height:297mm !important; margin:0 !important; box-shadow:none !important;
+    transform:none !important;
+  }
+  .print-page-wrapper{ width:auto !important; height:auto !important; overflow:visible !important; }
+  @page { size:A4 portrait; margin:0; }
+}
+
+/* ---- モバイル用：日付タブで1日ずつ表示するレイアウト ---- */
+.day-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.day-tab-btn{ flex:1; min-width:52px; padding:8px 4px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink); font-weight:600; font-size:13px; }
+.day-tab-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+.mobile-period-card{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; background:#fff; }
+.mobile-period-card.break-card{ background:var(--paper-dark); text-align:center; color:var(--muted2); font-size:13px; padding:8px; }
+.mobile-period-label{ font-size:12px; font-weight:700; color:#7A7263; margin-bottom:6px; }
+
+.print-page-wrapper{ overflow:hidden; margin:0 auto; }
+
+/* ---- ログイン画面 ---- */
+.login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.login-card{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:40px 32px; max-width:360px; width:100%; text-align:center; }
+.login-card h1{ font-family:'Shippori Mincho', serif; font-size:24px; margin:12px 0 4px; }
+.login-card .sub{ font-size:12.5px; color:var(--muted); margin-bottom:28px; }
+.login-note{ font-size:11.5px; color:var(--muted2); margin-top:20px; line-height:1.6; }
+
+@media (max-width: 720px){
+  header{ padding:14px 12px 10px; }
+  .brand h1{ font-size:19px; }
+  .brand .sub{ font-size:10px; }
+  .user-bar{ width:100%; justify-content:space-between; }
+  .save-status{ width:100%; order:3; }
+  nav.tabs{ margin-top:12px; gap:5px; }
+  .tab-btn{ padding:8px 10px; font-size:12.5px; flex:1 1 auto; justify-content:center; }
+  main{ padding:14px 10px; gap:14px; }
+  .card{ padding:13px; border-radius:10px; }
+  .section-title{ font-size:15.5px; }
+  .btn{ padding:8px 12px; font-size:13px; }
+  table.grid{ min-width:0 !important; }
+  .print-page{ box-shadow:none; }
+  .two-col-responsive{ grid-template-columns:1fr !important; }
+}
