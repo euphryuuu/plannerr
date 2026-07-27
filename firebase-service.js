@@ -73,33 +73,59 @@
 
     /**
      * PINコードでログインする。
-     * ・すでにアカウントがある場合 → そのPINでログインを試みる
-     * ・アカウントがまだ無い場合（初回利用）→ 入力されたPINで新規作成する
      *
-     * 戻り値: { ok: true, created: boolean } または { ok: false, reason: "short"|"wrong"|"other", message: string }
+     * 実装メモ（はまりやすいポイント）：
+     * Firebaseの新しいプロジェクトには「メール列挙保護」という機能があり、
+     * 「そのメールアドレスのアカウントが存在するかどうか」を外部から
+     * 推測されないよう、本来 auth/user-not-found となるべきところが
+     * auth/invalid-credential として返ってくることがあります。
+     * そのため「まずログインを試して、失敗したら新規登録する」という
+     * 順番だと、初回利用なのに「PINが違います」と誤判定してしまいます。
+     *
+     * これを避けるため、ここでは順番を逆にしています：
+     *   1. まず createUserWithEmailAndPassword を試す
+     *      → 初回利用ならここで成功し、そのPINで登録完了
+     *      → 2回目以降は auth/email-already-in-use で必ず失敗する
+     *   2. auth/email-already-in-use だった場合だけ、
+     *      signInWithEmailAndPassword で改めてログインを試す
+     *      → ここでPINが合っていれば成功、違っていれば失敗する
+     *
+     * 戻り値: { ok: true, created: boolean } または
+     *        { ok: false, reason: "short"|"wrong"|"other", message: string }
      */
     async signInWithPin(pin) {
       if (!pin || pin.length < MIN_PIN_LENGTH) {
         return { ok: false, reason: "short", message: `PINは${MIN_PIN_LENGTH}文字以上で入力してください。` };
       }
       try {
-        await auth.signInWithEmailAndPassword(FIXED_EMAIL, pin);
-        return { ok: true, created: false };
+        // 1. まず新規登録を試みる（初回利用ならここで完了）
+        await auth.createUserWithEmailAndPassword(FIXED_EMAIL, pin);
+        return { ok: true, created: true };
       } catch (e) {
-        if (e.code === "auth/user-not-found") {
-          // 初回利用：入力されたPINでアカウントを作成する
+        if (e.code === "auth/email-already-in-use") {
+          // 2. すでにアカウントがある＝2回目以降の利用。入力されたPINでログインを試す
           try {
-            await auth.createUserWithEmailAndPassword(FIXED_EMAIL, pin);
-            return { ok: true, created: true };
-          } catch (createErr) {
-            return { ok: false, reason: "other", message: `PINの設定に失敗しました（${createErr.message}）` };
+            await auth.signInWithEmailAndPassword(FIXED_EMAIL, pin);
+            return { ok: true, created: false };
+          } catch (signInErr) {
+            if (
+              signInErr.code === "auth/wrong-password" ||
+              signInErr.code === "auth/invalid-credential" ||
+              signInErr.code === "auth/invalid-login-credentials"
+            ) {
+              return { ok: false, reason: "wrong", message: "PINが違います。もう一度お試しください。" };
+            }
+            if (signInErr.code === "auth/too-many-requests") {
+              return { ok: false, reason: "other", message: "試行回数が多すぎます。しばらく待ってから再度お試しください。" };
+            }
+            return { ok: false, reason: "other", message: `ログインに失敗しました（${signInErr.message}）` };
           }
         }
-        if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential" || e.code === "auth/invalid-login-credentials") {
-          return { ok: false, reason: "wrong", message: "PINが違います。もう一度お試しください。" };
+        if (e.code === "auth/weak-password") {
+          return { ok: false, reason: "short", message: `PINは${MIN_PIN_LENGTH}文字以上で、もう少し複雑にしてください。` };
         }
-        if (e.code === "auth/too-many-requests") {
-          return { ok: false, reason: "other", message: "試行回数が多すぎます。しばらく待ってから再度お試しください。" };
+        if (e.code === "auth/operation-not-allowed") {
+          return { ok: false, reason: "other", message: "Firebaseコンソールで「メール/パスワード」認証が有効になっていません。README手順3を確認してください。" };
         }
         return { ok: false, reason: "other", message: `ログインに失敗しました（${e.message}）` };
       }
