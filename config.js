@@ -26,5 +26,5 @@ window.firebaseConfig = {
      → PINを忘れた場合の「再設定メール」の送り先になります。
    ・Googleアカウントである必要はありません（どのメールアドレスでもOK）。
 ------------------------------------------------------------ */
-window.APP_AUTH_EMAIL = "euph.ryunosuke555@gmail.com;
+window.APP_AUTH_EMAIL = "euph.ryunosuke555@gmail.com";
 
