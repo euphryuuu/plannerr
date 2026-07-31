@@ -730,6 +730,36 @@ function renderWeeklyMobile(cfg, week, numbers, jointNumbers) {
 }
 
 /* ---------------- めあて一覧タブ ---------------- */
+function getGradeRows(store, grade, count) {
+  const arr = [];
+  for (let n = 1; n <= count; n++) {
+    const v = store?.[grade]?.[n];
+    arr.push(v ? { perspective: v.perspective || "", text: v.text || "" } : { perspective: "", text: "" });
+  }
+  return arr;
+}
+function setGradeRows(store, grade, arr) {
+  const meta = store[grade]?._meta;
+  const obj = {};
+  arr.forEach((item, idx) => {
+    if (item && (item.perspective || item.text)) obj[idx + 1] = item;
+  });
+  if (meta) obj._meta = meta;
+  store[grade] = obj;
+}
+function insertObjectiveAt(store, grade, atNum, currentMax) {
+  const arr = getGradeRows(store, grade, currentMax);
+  arr.splice(atNum - 1, 0, { perspective: "", text: "" });
+  setGradeRows(store, grade, arr);
+  const meta = store[grade]._meta || { extra: 0 };
+  store[grade]._meta = { ...meta, extra: (meta.extra || 0) + 1 };
+}
+function deleteObjectiveAt(store, grade, atNum, currentMax) {
+  const arr = getGradeRows(store, grade, currentMax);
+  arr.splice(atNum - 1, 1);
+  setGradeRows(store, grade, arr);
+}
+
 function renderObjectivesTab() {
   const cfg = state.config;
   if (cfg.classes.length === 0) {
@@ -767,13 +797,17 @@ function renderObjectivesTab() {
           <input class="input" placeholder="具体的なめあてを入力（例：拍の流れにのって強弱の変化を感じ取りながら演奏する）" value="${esc(o.text || "")}" data-role="obj-text" data-store="${mode}" data-grade="${esc(grade)}" data-num="${num}" />
         </div>
         ${!isPlanned ? `<span style="font-size:11px;color:var(--muted2);white-space:nowrap;margin-top:8px;">未実施</span>` : ""}
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button class="btn btn-muted" style="padding:4px 8px;font-size:11px;" title="この位置に1回分を挿入し、以降を繰り下げる" data-role="obj-insert" data-store="${mode}" data-grade="${esc(grade)}" data-num="${num}" data-max="${displayCount}">➕挿入</button>
+          <button class="btn btn-muted" style="padding:4px 8px;font-size:11px;color:var(--warn);" title="この回を削除し、以降を繰り上げる" data-role="obj-delete" data-store="${mode}" data-grade="${esc(grade)}" data-num="${num}" data-max="${displayCount}">🗑削除</button>
+        </div>
       </div>`;
     })
     .join("");
 
   const modeHint = mode === "joint"
-    ? `ここは<strong>学年合同の授業</strong>専用のめあてです。週案タブでクラスの代わりに「🎵 ${esc(grade)}合同」を選んだコマにだけ表示されます。通常の各クラスの回数・めあてとは別にカウントされます。`
-    : `ここで入力しためあては、同じ学年に属するすべてのクラス（${esc(classesInGrade.join("、"))}）の週案に、回数が一致するコマへ自動的に表示されます。回数は週案に入力された授業から自動的に連動します。`;
+    ? `ここは<strong>学年合同の授業</strong>専用のめあてです。週案タブでクラスの代わりに「🎵 ${esc(grade)}合同」を選んだコマにだけ表示されます。通常の各クラスの回数・めあてとは別にカウントされます。各回の「➕挿入」でその位置に1回分を追加し、以降を繰り下げられます。「🗑削除」でその回を消し、以降を繰り上げられます（週案側の実際の授業予定は変わりません）。`
+    : `ここで入力しためあては、同じ学年に属するすべてのクラス（${esc(classesInGrade.join("、"))}）の週案に、回数が一致するコマへ自動的に表示されます。回数は週案に入力された授業から自動的に連動します。児童の様子に合わせて内容を差し替えたいときは、各回の「➕挿入」でその位置に1回分を追加して以降を繰り下げたり、「🗑削除」でその回を消して以降を繰り上げたりできます（週案側の実際の授業予定・日付は変わりません。あくまで「何回目に何を教えるか」の並びだけを調整します）。`;
 
   return `
   <div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
@@ -1011,11 +1045,11 @@ function renderPrintTab() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:4mm;">
       <div class="print-goal-box">
         <div style="font-size:9px;font-weight:700;margin-bottom:1mm;">振り返り・目標</div>
-        <div style="font-size:9px;white-space:pre-wrap;min-height:16mm;">${esc(combinedReflection)}</div>
+        <div style="font-size:9px;white-space:pre-wrap;min-height:34mm;">${esc(combinedReflection)}</div>
       </div>
       <div class="print-goal-box">
         <div style="font-size:9px;font-weight:700;margin-bottom:1mm;">管理職からのコメント</div>
-        <div style="font-size:9px;white-space:pre-wrap;min-height:16mm;"></div>
+        <div style="font-size:9px;white-space:pre-wrap;min-height:34mm;"></div>
       </div>
     </div>
   </div>
@@ -1083,6 +1117,29 @@ document.getElementById("app").addEventListener("click", (e) => {
     const curMeta = store?.[grade]?._meta || { extra: 0 };
     const nextExtra = Math.max(0, (curMeta.extra || 0) + Number(el.dataset.delta));
     store[grade] = { ...(store[grade] || {}), _meta: { ...curMeta, extra: nextExtra } };
+    markDirty();
+    render();
+  }
+  else if (role === "obj-insert") {
+    const grade = el.dataset.grade;
+    const num = Number(el.dataset.num);
+    const max = Number(el.dataset.max);
+    const store = el.dataset.store === "joint" ? state.jointObjectives : state.objectives;
+    store[grade] = store[grade] || {};
+    insertObjectiveAt(store, grade, num, max);
+    markDirty();
+    render();
+  }
+  else if (role === "obj-delete") {
+    const grade = el.dataset.grade;
+    const num = Number(el.dataset.num);
+    const max = Number(el.dataset.max);
+    const store = el.dataset.store === "joint" ? state.jointObjectives : state.objectives;
+    const current = store?.[grade]?.[num];
+    const hasContent = current && (current.perspective || current.text);
+    if (hasContent && !confirm(`第${num}回のめあてを削除すると、それ以降の回がひとつずつ繰り上がります。よろしいですか？`)) return;
+    store[grade] = store[grade] || {};
+    deleteObjectiveAt(store, grade, num, max);
     markDirty();
     render();
   }
