@@ -11,12 +11,12 @@
    実際のアクセス制御は Firestore のセキュリティルール（firestore.rules）で行います。
 ============================================================ */
 window.FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyAe3Pb3n43lxAlbIPeHXNSf4tBuSFZDZ1Q",
+  authDomain: "weekly-planner-22bf3.firebaseapp.com",
+  projectId: "weekly-planner-22bf3",
+  storageBucket: "weekly-planner-22bf3.firebasestorage.app",
+  messagingSenderId: "1060882519640",
+  appId: "1:1060882519640:web:1c5d2f327e1ae1ca089c2d"
 };
 
 /* ------------------------------------------------------------
@@ -26,5 +26,5 @@ window.FIREBASE_CONFIG = {
      → PINを忘れた場合の「再設定メール」の送り先になります。
    ・Googleアカウントである必要はありません（どのメールアドレスでもOK）。
 ------------------------------------------------------------ */
-window.APP_AUTH_EMAIL = "your-email@example.com";
+window.APP_AUTH_EMAIL = "euph.ryunosuke555@gmail.com";
 
