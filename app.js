@@ -1099,11 +1099,11 @@ function renderPrintTab() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:4mm;">
       <div class="print-goal-box">
         <div style="font-size:9px;font-weight:700;margin-bottom:1mm;">振り返り・目標</div>
-        <div style="font-size:9px;white-space:pre-wrap;min-height:34mm;">${esc(combinedReflection)}</div>
+        <div style="font-size:9px;white-space:pre-wrap;min-height:40mm;">${esc(combinedReflection)}</div>
       </div>
       <div class="print-goal-box">
         <div style="font-size:9px;font-weight:700;margin-bottom:1mm;">管理職からのコメント</div>
-        <div style="font-size:9px;white-space:pre-wrap;min-height:34mm;"></div>
+        <div style="font-size:9px;white-space:pre-wrap;min-height:40mm;"></div>
       </div>
     </div>
   </div>

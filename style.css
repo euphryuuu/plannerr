@@ -96,8 +96,8 @@ tr.break td{ background:var(--paper-dark); color:var(--muted2); text-align:cente
 .print-page table{ border-collapse:collapse; width:100%; table-layout:fixed; }
 .print-page th, .print-page td{ border:1px solid #666; }
 .print-th{ background:#F0EDE4; font-size:9.5px; padding:1.2mm 0.5mm; font-weight:700; text-align:center; }
-.print-period-cell{ padding:1mm 1.3mm; vertical-align:top; height:21mm; overflow:hidden; }
-.print-break-cell{ padding:0.8mm 1.3mm; vertical-align:middle; height:7mm; overflow:hidden; background:#FAFAF7; }
+.print-period-cell{ padding:1mm 1.3mm; vertical-align:top; height:24mm; overflow:hidden; }
+.print-break-cell{ padding:0.8mm 1.3mm; vertical-align:middle; height:8mm; overflow:hidden; background:#FAFAF7; }
 .print-break-label{ font-size:7px; color:#777; font-weight:700; }
 .print-break-note{ font-size:8px; color:#333; }
 .print-row-label{ text-align:center; font-size:10px; font-weight:700; color:#555; vertical-align:middle !important; }
