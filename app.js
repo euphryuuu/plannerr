@@ -144,27 +144,36 @@ function computeLessonNumbers(weeks) {
   const jointCounters = {}; // 学年合同の回数（学年ごと・個別クラスの回数とは完全に別カウント）
   const numbers = {};
   const jointNumbers = {};
+  const dateByClassNumber = {}; // { クラス名: { 回数: "YYYY-MM-DD" } }（学期での絞り込みに使用）
+  const dateByGradeJointNumber = {}; // { 学年: { 合同回数: "YYYY-MM-DD" } }
   for (const ws of weekStarts) {
     const week = weeks[ws];
     numbers[ws] = {};
     jointNumbers[ws] = {};
-    for (const d of ALL_DAYS) {
+    ALL_DAYS.forEach((d, dayIndex) => {
       numbers[ws][d.key] = {};
       jointNumbers[ws][d.key] = {};
-      for (const p of PERIOD_NUMS) {
+      PERIOD_NUMS.forEach((p) => {
         const slot = week?.lessons?.[d.key]?.[p];
-        if (!slot || slot.skip) continue;
+        if (!slot || slot.skip) return;
+        const dateStr = addDays(ws, dayIndex);
         if (slot.gradeWide) {
           jointCounters[slot.gradeWide] = (jointCounters[slot.gradeWide] || 0) + 1;
-          jointNumbers[ws][d.key][p] = jointCounters[slot.gradeWide];
+          const n = jointCounters[slot.gradeWide];
+          jointNumbers[ws][d.key][p] = n;
+          if (!dateByGradeJointNumber[slot.gradeWide]) dateByGradeJointNumber[slot.gradeWide] = {};
+          dateByGradeJointNumber[slot.gradeWide][n] = dateStr;
         } else if (slot.class) {
           counters[slot.class] = (counters[slot.class] || 0) + 1;
-          numbers[ws][d.key][p] = counters[slot.class];
+          const n = counters[slot.class];
+          numbers[ws][d.key][p] = n;
+          if (!dateByClassNumber[slot.class]) dateByClassNumber[slot.class] = {};
+          dateByClassNumber[slot.class][n] = dateStr;
         }
-      }
-    }
+      });
+    });
   }
-  return { numbers, maxByClass: counters, jointNumbers, maxJointByGrade: jointCounters };
+  return { numbers, maxByClass: counters, jointNumbers, maxJointByGrade: jointCounters, dateByClassNumber, dateByGradeJointNumber };
 }
 function computeHoursByClassAndMonth(weeks, config) {
   const result = {};
@@ -253,8 +262,37 @@ function migrateObjectivesToGrades(config, objectives) {
   });
   return { next, changed };
 }
+/** 旧バージョン（クラスごとの必要時数）から学年ごとの必要時数へ移行する */
+function migrateGradeRequiredHours(classes, existing) {
+  const result = { ...(existing || {}) };
+  classes.forEach((c) => {
+    if (result[c.grade] == null && c.requiredHours != null && c.requiredHours !== "") {
+      result[c.grade] = c.requiredHours;
+    }
+  });
+  return result;
+}
+
 function defaultConfig() {
-  return { classes: [], timetable: emptyTimetable() };
+  return { classes: [], timetable: emptyTimetable(), gradeRequiredHours: {} };
+}
+/** 三学期制の標準的な月の割り当て（4〜7月=1学期、9〜12月=2学期、1〜3月=3学期、8月は夏休みのため学期なし） */
+const TERM_MONTHS = { 1: [4, 5, 6, 7], 2: [9, 10, 11, 12], 3: [1, 2, 3] };
+function termOfDate(dateStr) {
+  if (!dateStr) return null;
+  const month = Number(dateStr.split("-")[1]);
+  for (const term of Object.keys(TERM_MONTHS)) {
+    if (TERM_MONTHS[term].includes(month)) return Number(term);
+  }
+  return null;
+}
+/** ある学年の「N回目」の授業が実際にあった代表日を求める（学年内のいずれかのクラスの実績日を使う） */
+function getGradeRepDate(config, dateByClassNumber, grade, num) {
+  const classesInGrade = config.classes.filter((c) => c.grade === grade).map((c) => c.name);
+  for (const cn of classesInGrade) {
+    if (dateByClassNumber[cn] && dateByClassNumber[cn][num]) return dateByClassNumber[cn][num];
+  }
+  return null;
 }
 
 /* ============================================================
@@ -271,6 +309,7 @@ const state = {
   currentMonday: toMonday(toDateStr(new Date())),
   objGrade: null,
   objMode: "normal",
+  objTerm: "all",
   ui: { newGrade: "1年", newSuffix: "", settingsDay: "mon", weekDay: "mon" },
   loginError: "",
   loginBusy: false,
@@ -346,6 +385,7 @@ async function startAppForUser(user) {
     state.config = {
       classes: migratedClasses,
       timetable: data.config?.timetable || emptyTimetable(),
+      gradeRequiredHours: migrateGradeRequiredHours(migratedClasses, data.config?.gradeRequiredHours),
     };
     state.weeks = data.weeks || {};
     const { next: migratedObjectives } = migrateObjectivesToGrades(state.config, data.objectives || {});
@@ -497,15 +537,15 @@ function renderSettingsTab() {
       (g) => `
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span style="font-size:12px;font-weight:700;color:var(--accent);min-width:42px;">${esc(g.grade)}</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted2);background:var(--paper-dark);border:1px solid var(--line);border-radius:8px;padding:4px 8px;">
+        必要時数（学年共通）
+        <input type="number" min="0" class="input" style="width:56px;padding:3px 5px;font-size:12px;" value="${cfg.gradeRequiredHours?.[g.grade] ?? ""}" data-role="grade-hours" data-grade="${esc(g.grade)}" />
+      </span>
       ${g.list
         .map(
           (c) => `
         <span class="chip">
           ${esc(c.name)}
-          <span style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--muted2);border-left:1px solid var(--line);padding-left:6px;margin-left:2px;">
-            必要時数
-            <input type="number" min="0" class="input" style="width:52px;padding:3px 5px;font-size:12px;" value="${c.requiredHours ?? ""}" data-role="class-hours" data-name="${esc(c.name)}" />
-          </span>
           <button data-role="remove-class" data-name="${esc(c.name)}">✕</button>
         </span>`
         )
@@ -541,7 +581,7 @@ function renderSettingsTab() {
   return `
   <section class="card">
     <h2 class="section-title">担当クラスの設定</h2>
-    <p class="hint">受け持っているクラスを、学年を選んでから登録してください。めあては学年ごとにまとめて管理されます（同じ学年の複数クラスで共通のめあてを使えます）。「必要時数」は年間で指導すべき時数です。「時数」タブで残り時数・達成率が自動計算されます（空欄のままでも構いません）。</p>
+    <p class="hint">受け持っているクラスを、学年を選んでから登録してください。めあては学年ごとにまとめて管理されます（同じ学年の複数クラスで共通のめあてを使えます）。「必要時数（学年共通）」は、その学年で年間に指導すべき時数です。同じ学年のクラスはすべて同じ値が使われます。「時数」タブで残り時数・達成率が自動計算されます（空欄のままでも構いません）。</p>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
       ${classesHtml || `<span style="color:var(--muted2);font-size:13px;">まだクラスが登録されていません</span>`}
     </div>
@@ -765,7 +805,7 @@ function renderObjectivesTab() {
   if (cfg.classes.length === 0) {
     return `<div class="card" style="color:var(--muted2);">「設定」タブで担当クラスを登録すると、ここにめあてを入力できます。</div>`;
   }
-  const { maxByClass, maxJointByGrade } = computeLessonNumbers(state.weeks);
+  const { maxByClass, maxJointByGrade, dateByClassNumber, dateByGradeJointNumber } = computeLessonNumbers(state.weeks);
   const maxByGrade = computeMaxByGrade(cfg, maxByClass);
   const gradesPresent = GRADES.filter((g) => cfg.classes.some((c) => c.grade === g));
   const grade = state.objGrade && gradesPresent.includes(state.objGrade) ? state.objGrade : gradesPresent[0];
@@ -774,12 +814,19 @@ function renderObjectivesTab() {
   const mode = state.objMode === "joint" ? "joint" : "normal";
   const store = mode === "joint" ? state.jointObjectives : state.objectives;
   const maxForGrade = mode === "joint" ? maxJointByGrade[grade] || 0 : maxByGrade[grade] || 0;
+  const term = state.objTerm || "all"; // "all" | "1" | "2" | "3"
 
   const known = Object.keys(store?.[grade] || {}).filter((k) => k !== "_meta").map(Number);
   const extra = store?.[grade]?._meta?.extra || 0;
   const maxNum = Math.max(maxForGrade, known.length ? Math.max(...known) : 0);
   const displayCount = maxNum + 3 + extra;
-  const rows = Array.from({ length: displayCount }, (_, i) => i + 1);
+  const allNums = Array.from({ length: displayCount }, (_, i) => i + 1);
+
+  function dateForNum(num) {
+    return mode === "joint" ? dateByGradeJointNumber[grade]?.[num] : getGradeRepDate(cfg, dateByClassNumber, grade, num);
+  }
+  // 学期で絞り込む。ただし「未実施（今後の回）」は日付が未定なので、どの学期を見ていても常に表示する
+  const rows = term === "all" ? allNums : allNums.filter((num) => num > maxForGrade || termOfDate(dateForNum(num)) === Number(term));
 
   const rowsHtml = rows
     .map((num) => {
@@ -825,8 +872,15 @@ function renderObjectivesTab() {
     </div>
   </div>
 
+  <div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <span style="font-size:14px;font-weight:600;">学期：</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${["all", "1", "2", "3"].map((t) => `<button class="pill-btn ${term === t ? "active" : ""}" data-role="obj-term" data-term="${t}">${t === "all" ? "すべて" : `${t}学期`}</button>`).join("")}
+    </div>
+  </div>
+
   <section class="card">
-    <p class="hint">${modeHint}</p>
+    <p class="hint">${modeHint}${term !== "all" ? " 学期で絞り込んで表示していますが、丸数字の回数は学期ごとではなく年間の通し番号のままです。今後の回（未実施）はどの学期を見ていても表示されます。" : ""}</p>
     <div style="display:flex;flex-direction:column;gap:10px;">${rowsHtml}</div>
     <div style="display:flex;justify-content:center;gap:10px;margin-top:14px;">
       <button class="btn btn-outline" data-role="obj-extra" data-store="${mode}" data-grade="${esc(grade)}" data-delta="1">＋ 回を追加</button>
@@ -859,7 +913,7 @@ function renderHoursTab() {
 
   function progressInfo(c) {
     const total = classTotal(c.name);
-    const required = c.requiredHours;
+    const required = cfg.gradeRequiredHours?.[c.grade];
     if (required == null || required === "") return { remaining: null, percent: null };
     const remaining = required - total;
     const percent = required > 0 ? Math.round((total / required) * 1000) / 10 : null;
@@ -887,7 +941,7 @@ function renderHoursTab() {
             <td style="padding:6px 10px;">${esc(c.name)}</td>
             ${cells}
             <td style="text-align:center;font-weight:700;">${rowTotal}</td>
-            <td style="text-align:center;color:var(--muted2);">${c.requiredHours ?? "－"}</td>
+            <td style="text-align:center;color:var(--muted2);">${cfg.gradeRequiredHours?.[c.grade] ?? "－"}</td>
             <td style="text-align:center;">${remainingCell}</td>
             <td style="text-align:center;font-weight:700;color:${percentColor};">${percent == null ? "－" : `${percent}%`}</td>
           </tr>`;
@@ -932,7 +986,7 @@ function renderHoursTab() {
               <span style="font-weight:700;color:var(--accent);">総計 ${rowTotal}回</span>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px;">
-              <span>必要時数：${c.requiredHours ?? "－"}</span>
+              <span>必要時数：${cfg.gradeRequiredHours?.[c.grade] ?? "－"}</span>
               <span>${remaining == null ? "" : remaining > 0 ? `残り${remaining}` : remaining === 0 ? "達成" : `+${-remaining}超過`}</span>
               <span style="font-weight:700;color:${percentColor};">${percent == null ? "" : `${percent}%`}</span>
             </div>
@@ -1065,7 +1119,7 @@ function addClass() {
   if (!suffix) return;
   const name = `${grade}${suffix}組`;
   if (state.config.classes.some((c) => c.name === name)) return;
-  state.config.classes.push({ name, grade, suffix, requiredHours: null });
+  state.config.classes.push({ name, grade, suffix });
   state.ui.newSuffix = "";
   markDirty();
 }
@@ -1111,6 +1165,7 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (role === "add-class") { addClass(); render(); }
   else if (role === "obj-grade") { state.objGrade = el.dataset.grade; render(); }
   else if (role === "obj-mode") { state.objMode = el.dataset.mode; render(); }
+  else if (role === "obj-term") { state.objTerm = el.dataset.term; render(); }
   else if (role === "obj-extra") {
     const grade = el.dataset.grade;
     const store = el.dataset.store === "joint" ? state.jointObjectives : state.objectives;
@@ -1189,14 +1244,13 @@ document.getElementById("app").addEventListener("change", (e) => {
       render();
       return;
     }
-    if (role === "class-hours") {
-      const name = el.dataset.name;
-      const cls = state.config.classes.find((c) => c.name === name);
-      if (cls) {
-        const v = el.value === "" ? null : Math.max(0, Number(el.value));
-        cls.requiredHours = v;
-        markDirty();
-      }
+    if (role === "grade-hours") {
+      const grade = el.dataset.grade;
+      const v = el.value === "" ? null : Math.max(0, Number(el.value));
+      state.config.gradeRequiredHours = { ...(state.config.gradeRequiredHours || {}) };
+      if (v == null) delete state.config.gradeRequiredHours[grade];
+      else state.config.gradeRequiredHours[grade] = v;
+      markDirty();
       return;
     }
     if (role === "obj-perspective") {
