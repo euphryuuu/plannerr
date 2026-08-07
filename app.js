@@ -110,6 +110,26 @@ function formatDayHeader(monday, dayIndex) {
   const dt = new Date(dateStr);
   return `${Number(m)}月${Number(d)}日(${WEEKDAY_KANJI[dt.getDay()]})`;
 }
+function addMonths(yearMonth, n) {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const dt = new Date(y, m - 1 + n, 1);
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
+}
+function daysInMonth(yearMonth) {
+  const [y, m] = yearMonth.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+const DAY_KEY_BY_JSDAY = { 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat" }; // 0(日)は授業日ではないためキー無し
+function lessonAtDate(dateStr, period) {
+  const dt = new Date(dateStr);
+  const dayKey = DAY_KEY_BY_JSDAY[dt.getDay()];
+  if (!dayKey) return null;
+  const monday = toMonday(dateStr);
+  const week = state.weeks[monday];
+  if (!week) return null;
+  if (dayKey === "sat" && !week.showSaturday) return null;
+  return week.lessons?.[dayKey]?.[period] || null;
+}
 function emptyTimetable() {
   const t = {};
   ALL_DAYS.forEach((d) => { t[d.key] = {}; PERIOD_NUMS.forEach((p) => { t[d.key][p] = null; }); });
@@ -307,6 +327,7 @@ const state = {
   objectives: {},
   jointObjectives: {},
   currentMonday: toMonday(toDateStr(new Date())),
+  monthView: toDateStr(new Date()).slice(0, 7),
   objGrade: null,
   objMode: "normal",
   objTerm: "all",
@@ -493,6 +514,7 @@ function renderHeader() {
     { key: "weekly", label: "週案" },
     { key: "objectives", label: "めあて一覧" },
     { key: "hours", label: "時数" },
+    { key: "month", label: "月間予定" },
     { key: "print", label: "印刷プレビュー" },
   ];
 
@@ -522,6 +544,7 @@ function renderTabContent() {
   if (state.tab === "weekly") return renderWeeklyTab();
   if (state.tab === "objectives") return renderObjectivesTab();
   if (state.tab === "hours") return renderHoursTab();
+  if (state.tab === "month") return renderMonthTab();
   if (state.tab === "print") return renderPrintTab();
   return "";
 }
@@ -1027,6 +1050,62 @@ function renderHoursTab() {
 }
 
 /* ---------------- 印刷プレビュー タブ（A4縦・行の高さ均一） ---------------- */
+/* ---------------- 月間予定タブ ---------------- */
+function renderMonthTab() {
+  const cfg = state.config;
+  if (cfg.classes.length === 0) {
+    return `<div class="card" style="color:var(--muted2);">「設定」タブでまず担当クラスを登録してください。</div>`;
+  }
+  const ym = state.monthView;
+  const [y, m] = ym.split("-");
+  const lastDay = daysInMonth(ym);
+  const dayNums = Array.from({ length: lastDay }, (_, i) => i + 1);
+
+  const headerCells = dayNums
+    .map((d) => {
+      const dateStr = `${ym}-${pad(d)}`;
+      const dt = new Date(dateStr);
+      const jsDay = dt.getDay();
+      const kanji = WEEKDAY_KANJI[jsDay];
+      const cls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
+      return `<th class="${cls}">${d}<br/><span style="font-weight:400;font-size:9px;">${kanji}</span></th>`;
+    })
+    .join("");
+
+  const bodyRows = PERIOD_NUMS.map((p) => {
+    const cells = dayNums
+      .map((d) => {
+        const dateStr = `${ym}-${pad(d)}`;
+        const dt = new Date(dateStr);
+        const jsDay = dt.getDay();
+        const cls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
+        const slot = lessonAtDate(dateStr, p);
+        if (!slot || (!slot.class && !slot.gradeWide)) return `<td class="${cls}"></td>`;
+        const label = slot.gradeWide ? `${slot.gradeWide}合同` : slot.class;
+        return `<td class="${cls}" style="font-weight:600;${slot.skip ? "color:var(--muted2);text-decoration:line-through;" : ""}">${esc(label)}</td>`;
+      })
+      .join("");
+    return `<tr><td class="row-label">${p}</td>${cells}</tr>`;
+  }).join("");
+
+  return `
+  <div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <button class="nav-btn" data-role="month-nav" data-delta="-1">‹</button>
+    <span style="font-family:'Shippori Mincho', serif;font-size:17px;font-weight:700;">${y}年${Number(m)}月</span>
+    <button class="nav-btn" data-role="month-nav" data-delta="1">›</button>
+    <span style="font-size:12px;color:var(--muted2);">土曜日は「週案」タブでその週の「土曜授業がある」にチェックが入っている場合のみ表示されます。</span>
+  </div>
+
+  <section class="card" style="overflow-x:auto;">
+    <table class="grid month-grid">
+      <thead><tr><th style="width:36px;"></th>${headerCells}</tr></thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+  </section>`;
+}
+
+
+/* ---------------- 印刷プレビュー タブ（A4縦・行の高さ均一） ---------------- */
 function renderPrintTab() {
   const cfg = state.config;
   const week = state.weeks[state.currentMonday] || buildWeekFromTimetable(cfg.timetable);
@@ -1154,6 +1233,10 @@ document.getElementById("app").addEventListener("click", (e) => {
   else if (role === "week-nav" || role === "print-nav") {
     state.currentMonday = addDays(state.currentMonday, Number(el.dataset.delta));
     ensureWeek();
+    render();
+  }
+  else if (role === "month-nav") {
+    state.monthView = addMonths(state.monthView, Number(el.dataset.delta));
     render();
   }
   else if (role === "apply-timetable") { applyTimetableToWeek(); render(); }
