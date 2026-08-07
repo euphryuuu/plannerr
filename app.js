@@ -1070,9 +1070,9 @@ function renderMonthTab() {
       const rowCls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
       const cells = PERIOD_NUMS.map((p) => {
         const slot = lessonAtDate(dateStr, p);
-        if (!slot || (!slot.class && !slot.gradeWide)) return `<td class="${rowCls}"></td>`;
+        if (!slot || (!slot.class && !slot.gradeWide) || slot.skip) return `<td class="${rowCls}"></td>`;
         const label = slot.gradeWide ? `${slot.gradeWide}合同` : slot.class;
-        return `<td class="${rowCls}" style="font-weight:600;${slot.skip ? "color:var(--muted2);text-decoration:line-through;" : ""}">${esc(label)}</td>`;
+        return `<td class="${rowCls}" style="font-weight:600;">${esc(label)}</td>`;
       }).join("");
       return `<tr><td class="row-label ${rowCls}">${d}<span style="font-weight:400;font-size:9px;margin-left:2px;">(${kanji})</span></td>${cells}</tr>`;
     })
