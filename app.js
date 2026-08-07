@@ -147,14 +147,12 @@ function emptyBreakNotes() {
 function getBreakNote(week, day, label) {
   return week?.breakNotes?.[day]?.[label] || "";
 }
-function buildWeekFromTimetable(timetable) {
+/** 固定時間割を反映しない、空の週を作る（週を移動しただけでは時間割が自動で入らないようにするため） */
+function buildEmptyWeek() {
   const lessons = {};
   ALL_DAYS.forEach((d) => {
     lessons[d.key] = {};
-    PERIOD_NUMS.forEach((p) => {
-      const cls = timetable?.[d.key]?.[p] || null;
-      lessons[d.key][p] = cls ? { class: cls, gradeWide: null, content: "", skip: false, skipReason: "" } : null;
-    });
+    PERIOD_NUMS.forEach((p) => { lessons[d.key][p] = null; });
   });
   return { lessons, breakNotes: emptyBreakNotes(), reflection: "", goal: "", showSaturday: false };
 }
@@ -383,7 +381,7 @@ window.addEventListener("beforeunload", (e) => {
 });
 function ensureWeek() {
   if (!state.weeks[state.currentMonday]) {
-    state.weeks[state.currentMonday] = buildWeekFromTimetable(state.config.timetable);
+    state.weeks[state.currentMonday] = buildEmptyWeek();
     markDirty();
   }
 }
@@ -620,7 +618,7 @@ function renderSettingsTab() {
 
   <section class="card">
     <h2 class="section-title">固定時間割の設定</h2>
-    <p class="hint">各曜日・各時間に担当するクラスを選択してください。新しく作成する週にはこの内容が反映されます（既存の週には影響しません）。土曜授業がある週は、「週案」タブでその週ごとにチェックを入れて追加できます。</p>
+    <p class="hint">各曜日・各時間に担当するクラスを選択してください。ここで設定した内容は自動では反映されず、「週案」タブの「⟲ 時間割を反映」ボタンを押したときだけ、その週に反映されます。土曜授業がある週は、「週案」タブでその週ごとにチェックを入れて追加できます。</p>
     ${timetableSection}
   </section>`;
 }
@@ -700,7 +698,7 @@ function shortMD(dateStr) {
 }
 function renderWeeklyTab() {
   const cfg = state.config;
-  const week = state.weeks[state.currentMonday] || buildWeekFromTimetable(cfg.timetable);
+  const week = state.weeks[state.currentMonday] || buildEmptyWeek();
   const { numbers, jointNumbers } = computeLessonNumbers(state.weeks);
 
   const gridSection = isNarrow() ? renderWeeklyMobile(cfg, week, numbers, jointNumbers) : renderWeeklyDesktop(cfg, week, numbers, jointNumbers);
@@ -1061,32 +1059,24 @@ function renderMonthTab() {
   const lastDay = daysInMonth(ym);
   const dayNums = Array.from({ length: lastDay }, (_, i) => i + 1);
 
-  const headerCells = dayNums
+  const headerCells = PERIOD_NUMS.map((p) => `<th>${p}</th>`).join("");
+
+  const bodyRows = dayNums
     .map((d) => {
       const dateStr = `${ym}-${pad(d)}`;
       const dt = new Date(dateStr);
       const jsDay = dt.getDay();
       const kanji = WEEKDAY_KANJI[jsDay];
-      const cls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
-      return `<th class="${cls}">${d}<br/><span style="font-weight:400;font-size:9px;">${kanji}</span></th>`;
+      const rowCls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
+      const cells = PERIOD_NUMS.map((p) => {
+        const slot = lessonAtDate(dateStr, p);
+        if (!slot || (!slot.class && !slot.gradeWide)) return `<td class="${rowCls}"></td>`;
+        const label = slot.gradeWide ? `${slot.gradeWide}合同` : slot.class;
+        return `<td class="${rowCls}" style="font-weight:600;${slot.skip ? "color:var(--muted2);text-decoration:line-through;" : ""}">${esc(label)}</td>`;
+      }).join("");
+      return `<tr><td class="row-label ${rowCls}">${d}<span style="font-weight:400;font-size:9px;margin-left:2px;">(${kanji})</span></td>${cells}</tr>`;
     })
     .join("");
-
-  const bodyRows = PERIOD_NUMS.map((p) => {
-    const cells = dayNums
-      .map((d) => {
-        const dateStr = `${ym}-${pad(d)}`;
-        const dt = new Date(dateStr);
-        const jsDay = dt.getDay();
-        const cls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
-        const slot = lessonAtDate(dateStr, p);
-        if (!slot || (!slot.class && !slot.gradeWide)) return `<td class="${cls}"></td>`;
-        const label = slot.gradeWide ? `${slot.gradeWide}合同` : slot.class;
-        return `<td class="${cls}" style="font-weight:600;${slot.skip ? "color:var(--muted2);text-decoration:line-through;" : ""}">${esc(label)}</td>`;
-      })
-      .join("");
-    return `<tr><td class="row-label">${p}</td>${cells}</tr>`;
-  }).join("");
 
   return `
   <div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
@@ -1098,7 +1088,7 @@ function renderMonthTab() {
 
   <section class="card" style="overflow-x:auto;">
     <table class="grid month-grid">
-      <thead><tr><th style="width:36px;"></th>${headerCells}</tr></thead>
+      <thead><tr><th style="width:56px;"></th>${headerCells}</tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
   </section>`;
@@ -1108,7 +1098,7 @@ function renderMonthTab() {
 /* ---------------- 印刷プレビュー タブ（A4縦・行の高さ均一） ---------------- */
 function renderPrintTab() {
   const cfg = state.config;
-  const week = state.weeks[state.currentMonday] || buildWeekFromTimetable(cfg.timetable);
+  const week = state.weeks[state.currentMonday] || buildEmptyWeek();
   const days = visibleDays(week);
   const { numbers, jointNumbers } = computeLessonNumbers(state.weeks);
 
@@ -1203,7 +1193,7 @@ function addClass() {
   markDirty();
 }
 function applyTimetableToWeek() {
-  const w = state.weeks[state.currentMonday] || buildWeekFromTimetable(state.config.timetable);
+  const w = state.weeks[state.currentMonday] || buildEmptyWeek();
   const lessons = {};
   ALL_DAYS.forEach((d) => {
     lessons[d.key] = { ...w.lessons[d.key] };
