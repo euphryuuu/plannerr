@@ -56,6 +56,34 @@ const PERSPECTIVES = [
   { key: "主", label: "主：主体的に学習に取り組む態度" },
 ];
 const PERSPECTIVE_COLOR = { 知: "#2B6E6E", 技: "#4A6FA5", 思: "#8A5A2B", 主: "#B5453D" };
+/** 避難訓練などで授業時間の一部しか行えなかった場合に、時数を按分するための選択肢 */
+const HOUR_FRACTIONS = [
+  { value: 1, label: "通常（1）" },
+  { value: 3 / 4, label: "3/4" },
+  { value: 2 / 3, label: "2/3" },
+  { value: 1 / 2, label: "1/2" },
+  { value: 1 / 3, label: "1/3" },
+  { value: 1 / 4, label: "1/4" },
+];
+function fractionLabel(v) {
+  const found = HOUR_FRACTIONS.find((f) => Math.abs(f.value - v) < 0.001);
+  return found ? found.label : String(v);
+}
+function formatHours(v) {
+  if (v == null || Number.isNaN(v)) return "";
+  const sign = v < 0 ? "-" : "";
+  const abs = Math.abs(v);
+  // 分数は 1・3/4・2/3・1/2・1/3・1/4 のみを扱うので、12分の1単位に丸めれば誤差なく整数比で表せる
+  const twelfths = Math.round(abs * 12);
+  const whole = Math.floor(twelfths / 12);
+  const rem = twelfths % 12;
+  if (rem === 0) return `${sign}${whole}`;
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const g = gcd(rem, 12);
+  const num = rem / g;
+  const den = 12 / g;
+  return whole > 0 ? `${sign}${whole} ${num}/${den}` : `${sign}${num}/${den}`;
+}
 const GRADES = ["1年", "2年", "3年", "4年", "5年", "6年", "その他"];
 const WEEKDAY_KANJI = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -202,6 +230,7 @@ function computeHoursByClassAndMonth(weeks, config) {
       PERIOD_NUMS.forEach((p) => {
         const slot = week?.lessons?.[d.key]?.[p];
         if (!slot || slot.skip) return;
+        const credit = slot.hourFraction ?? 1; // 避難訓練等で授業時間が短くなった場合の按分（既定は1＝通常）
         const dateStr = addDays(ws, dayIndex);
         const [y, m] = dateStr.split("-");
         const mk = `${y}-${m}`;
@@ -210,12 +239,12 @@ function computeHoursByClassAndMonth(weeks, config) {
           classesInGrade.forEach((cn) => {
             monthsSet.add(mk);
             if (!result[cn]) result[cn] = {};
-            result[cn][mk] = (result[cn][mk] || 0) + 1;
+            result[cn][mk] = (result[cn][mk] || 0) + credit;
           });
         } else if (slot.class) {
           monthsSet.add(mk);
           if (!result[slot.class]) result[slot.class] = {};
-          result[slot.class][mk] = (result[slot.class][mk] || 0) + 1;
+          result[slot.class][mk] = (result[slot.class][mk] || 0) + credit;
         }
       });
     });
@@ -676,13 +705,21 @@ function renderSlotEditorInner(cfg, week, numbers, jointNumbers, dayKey, periodN
   let detail = "";
   if (slot?.class || slot?.gradeWide) {
     const badgeLabel = num ? (isJoint ? `合${circled(num)}` : circled(num)) : "-";
+    const curFraction = slot.hourFraction ?? 1;
     detail = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
         <span class="badge-circle ${slot.skip ? "skip" : ""} ${isJoint ? "joint" : ""}" title="${isJoint ? "学年合同の回数（個別クラスの回数とは別カウント）" : "授業回数"}">${badgeLabel}</span>
         <label style="font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:4px;">
           <input type="checkbox" data-role="slot-skip" data-day="${dayKey}" data-period="${periodNum}" ${slot.skip ? "checked" : ""} /> 実施しない
         </label>
       </div>
+      ${!slot.skip ? `
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+        <span style="font-size:10.5px;color:var(--muted2);white-space:nowrap;">時数${curFraction !== 1 ? "（避難訓練等）" : ""}：</span>
+        <select class="select" style="width:auto;padding:2px 4px;font-size:11px;" data-role="slot-hour-fraction" data-day="${dayKey}" data-period="${periodNum}">
+          ${HOUR_FRACTIONS.map((f) => `<option value="${f.value}" ${Math.abs(f.value - curFraction) < 0.001 ? "selected" : ""}>${f.label}</option>`).join("")}
+        </select>
+      </div>` : ""}
       <textarea class="textarea" style="margin-bottom:6px;" rows="3" placeholder="授業内容" data-role="slot-content" data-day="${dayKey}" data-period="${periodNum}">${esc(slot.content || "")}</textarea>
       <div class="obj-preview ${objText ? "has-text" : ""}">
         ${objPersp ? `<span style="color:${PERSPECTIVE_COLOR[objPersp] || "#555"};font-weight:700;margin-right:4px;">【${objPersp}】</span>` : ""}
@@ -952,16 +989,16 @@ function renderHoursTab() {
             .map((m) => {
               const v = result[c.name]?.[m] || 0;
               monthTotals[m] += v;
-              return `<td style="text-align:center;">${v || ""}</td>`;
+              return `<td style="text-align:center;">${v ? formatHours(v) : ""}</td>`;
             })
             .join("");
           const { remaining, percent } = progressInfo(c);
-          const remainingCell = remaining == null ? "－" : remaining > 0 ? `残り${remaining}` : `${remaining === 0 ? "達成" : `+${-remaining}超過`}`;
+          const remainingCell = remaining == null ? "－" : remaining > 0 ? `残り${formatHours(remaining)}` : `${remaining === 0 ? "達成" : `+${formatHours(-remaining)}超過`}`;
           const percentColor = percent == null ? "var(--muted2)" : percent >= 100 ? "var(--accent)" : percent >= 70 ? "#8A5A2B" : "var(--warn)";
           return `<tr>
             <td style="padding:6px 10px;">${esc(c.name)}</td>
             ${cells}
-            <td style="text-align:center;font-weight:700;">${rowTotal}</td>
+            <td style="text-align:center;font-weight:700;">${formatHours(rowTotal)}</td>
             <td style="text-align:center;color:var(--muted2);">${cfg.gradeRequiredHours?.[c.grade] ?? "－"}</td>
             <td style="text-align:center;">${remainingCell}</td>
             <td style="text-align:center;font-weight:700;color:${percentColor};">${percent == null ? "－" : `${percent}%`}</td>
@@ -973,8 +1010,8 @@ function renderHoursTab() {
     .join("");
 
   const totalRow = `<tr style="background:var(--paper-dark);font-weight:700;"><td style="padding:6px 10px;">合計</td>${months
-    .map((m) => `<td style="text-align:center;">${monthTotals[m]}</td>`)
-    .join("")}<td style="text-align:center;">${grandTotal}</td><td></td><td></td><td></td></tr>`;
+    .map((m) => `<td style="text-align:center;">${monthTotals[m] ? formatHours(monthTotals[m]) : ""}</td>`)
+    .join("")}<td style="text-align:center;">${formatHours(grandTotal)}</td><td></td><td></td><td></td></tr>`;
 
   const monthHeaders = months
     .map((m) => {
@@ -996,7 +1033,7 @@ function renderHoursTab() {
             .map((m) => {
               const v = result[c.name]?.[m] || 0;
               const [y, mm] = m.split("-");
-              return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);font-size:12.5px;"><span>${y}年${Number(mm)}月</span><span>${v || 0}回</span></div>`;
+              return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);font-size:12.5px;"><span>${y}年${Number(mm)}月</span><span>${v ? formatHours(v) : 0}回</span></div>`;
             })
             .join("");
           const percentColor = percent == null ? "var(--muted2)" : percent >= 100 ? "var(--accent)" : percent >= 70 ? "#8A5A2B" : "var(--warn)";
@@ -1004,11 +1041,11 @@ function renderHoursTab() {
           <div class="mobile-period-card">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
               <span style="font-weight:700;">${esc(c.name)}</span>
-              <span style="font-weight:700;color:var(--accent);">総計 ${rowTotal}回</span>
+              <span style="font-weight:700;color:var(--accent);">総計 ${formatHours(rowTotal)}回</span>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px;">
               <span>必要時数：${cfg.gradeRequiredHours?.[c.grade] ?? "－"}</span>
-              <span>${remaining == null ? "" : remaining > 0 ? `残り${remaining}` : remaining === 0 ? "達成" : `+${-remaining}超過`}</span>
+              <span>${remaining == null ? "" : remaining > 0 ? `残り${formatHours(remaining)}` : remaining === 0 ? "達成" : `+${formatHours(-remaining)}超過`}</span>
               <span style="font-weight:700;color:${percentColor};">${percent == null ? "" : `${percent}%`}</span>
             </div>
             ${monthList}
@@ -1020,7 +1057,7 @@ function renderHoursTab() {
     const monthTotalList = months
       .map((m) => {
         const [y, mm] = m.split("-");
-        return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);font-size:12.5px;"><span>${y}年${Number(mm)}月</span><span>${monthTotals[m]}回</span></div>`;
+        return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);font-size:12.5px;"><span>${y}年${Number(mm)}月</span><span>${formatHours(monthTotals[m])}回</span></div>`;
       })
       .join("");
     return `
@@ -1030,7 +1067,7 @@ function renderHoursTab() {
       ${cardsHtml}
       <div style="font-size:12px;font-weight:700;color:var(--accent);margin:10px 0 6px;">全クラス合計</div>
       <div class="mobile-period-card">
-        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">総計 ${grandTotal}回</div>
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">総計 ${formatHours(grandTotal)}回</div>
         ${monthTotalList}
       </div>
     </section>`;
@@ -1049,6 +1086,15 @@ function renderHoursTab() {
 
 /* ---------------- 印刷プレビュー タブ（A4縦・行の高さ均一） ---------------- */
 /* ---------------- 月間予定タブ ---------------- */
+function gradeDigit(grade) {
+  const m = String(grade).match(/^(\d+)/);
+  return m ? m[1] : String(grade).slice(0, 1);
+}
+function classShortLabel(cfg, className) {
+  const c = cfg.classes.find((x) => x.name === className);
+  if (!c) return className;
+  return `${gradeDigit(c.grade)}${c.suffix || ""}`;
+}
 function renderMonthTab() {
   const cfg = state.config;
   if (cfg.classes.length === 0) {
@@ -1071,10 +1117,17 @@ function renderMonthTab() {
       const cells = PERIOD_NUMS.map((p) => {
         const slot = lessonAtDate(dateStr, p);
         if (!slot || (!slot.class && !slot.gradeWide) || slot.skip) return `<td class="${rowCls}"></td>`;
-        const label = slot.gradeWide ? `${slot.gradeWide}合同` : slot.class;
-        return `<td class="${rowCls}" style="font-weight:600;">${esc(label)}</td>`;
+        const label = slot.gradeWide ? `${gradeDigit(slot.gradeWide)}合` : classShortLabel(cfg, slot.class);
+        return `<td class="${rowCls}" style="font-weight:600;" title="${slot.gradeWide ? esc(`${slot.gradeWide}合同`) : esc(slot.class)}">${esc(label)}</td>`;
       }).join("");
       return `<tr><td class="row-label ${rowCls}">${d}<span style="font-weight:400;font-size:9px;margin-left:2px;">(${kanji})</span></td>${cells}</tr>`;
+    })
+    .join("");
+
+  const legendGroups = GRADES.filter((g) => cfg.classes.some((c) => c.grade === g))
+    .map((g) => {
+      const items = cfg.classes.filter((c) => c.grade === g).map((c) => `${gradeDigit(c.grade)}${c.suffix || ""}=${esc(c.name)}`);
+      return `<span style="margin-right:14px;white-space:nowrap;">${items.join("、")}</span>`;
     })
     .join("");
 
@@ -1091,6 +1144,7 @@ function renderMonthTab() {
       <thead><tr><th style="width:56px;"></th>${headerCells}</tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted2);line-height:1.8;">${legendGroups}（学年合同は「6合」のように表示）</div>
   </section>`;
 }
 
@@ -1123,7 +1177,7 @@ function renderPrintTab() {
       const objPersp = objStore?.[grade]?.[num]?.perspective || "";
       const numLabel = num ? (isJoint ? `合${num}` : `${num}`) : "";
       return `<td class="print-period-cell">
-        <div class="print-lesson-line1">${esc(displayName)}　音楽${slot.skip ? `<span class="print-badge skip">実施なし</span>` : ""}</div>
+        <div class="print-lesson-line1">${esc(displayName)}　音楽${slot.skip ? `<span class="print-badge skip">実施なし</span>` : (slot.hourFraction ?? 1) !== 1 ? `<span class="print-badge">${fractionLabel(slot.hourFraction)}</span>` : ""}</div>
         <div class="clamp2 print-lesson-line2">${esc(slot.content)}${numLabel ? ` (${numLabel})` : ""}</div>
         ${objText ? `<div class="clamp2 print-lesson-line3" style="color:${PERSPECTIVE_COLOR[objPersp] || "#333"};">${objPersp ? `${objPersp}　` : ""}${esc(objText)}</div>` : ""}
       </td>`;
@@ -1200,7 +1254,7 @@ function applyTimetableToWeek() {
     PERIOD_NUMS.forEach((p) => {
       const cls = state.config.timetable?.[d.key]?.[p] || null;
       const existing = lessons[d.key][p];
-      if (cls && !existing) lessons[d.key][p] = { class: cls, gradeWide: null, content: "", skip: false, skipReason: "" };
+      if (cls && !existing) lessons[d.key][p] = { class: cls, gradeWide: null, content: "", skip: false, skipReason: "", hourFraction: 1 };
     });
   });
   state.weeks[state.currentMonday] = { ...w, lessons };
@@ -1283,14 +1337,22 @@ document.getElementById("app").addEventListener("change", (e) => {
     if (role === "slot-class") {
       const day = el.dataset.day, period = el.dataset.period;
       const w = state.weeks[state.currentMonday];
-      const existing = w.lessons[day][period] || { content: "", skip: false, skipReason: "" };
+      const existing = w.lessons[day][period] || { content: "", skip: false, skipReason: "", hourFraction: 1 };
       if (!el.value) {
         w.lessons[day][period] = null;
       } else if (el.value.startsWith("grade:")) {
-        w.lessons[day][period] = { ...existing, class: null, gradeWide: el.value.slice(6), skip: false };
+        w.lessons[day][period] = { ...existing, class: null, gradeWide: el.value.slice(6), skip: false, hourFraction: existing.hourFraction ?? 1 };
       } else if (el.value.startsWith("cls:")) {
-        w.lessons[day][period] = { ...existing, class: el.value.slice(4), gradeWide: null, skip: false };
+        w.lessons[day][period] = { ...existing, class: el.value.slice(4), gradeWide: null, skip: false, hourFraction: existing.hourFraction ?? 1 };
       }
+      markDirty();
+      render();
+      return;
+    }
+    if (role === "slot-hour-fraction") {
+      const day = el.dataset.day, period = el.dataset.period;
+      const w = state.weeks[state.currentMonday];
+      w.lessons[day][period] = { ...w.lessons[day][period], hourFraction: Number(el.value) };
       markDirty();
       render();
       return;
