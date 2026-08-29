@@ -355,6 +355,7 @@ const state = {
   jointObjectives: {},
   currentMonday: toMonday(toDateStr(new Date())),
   monthView: toDateStr(new Date()).slice(0, 7),
+  printWeekOffset: 0,
   objGrade: null,
   objMode: "normal",
   objTerm: "all",
@@ -1152,7 +1153,10 @@ function renderMonthTab() {
 /* ---------------- 印刷プレビュー タブ（A4縦・行の高さ均一） ---------------- */
 function renderPrintTab() {
   const cfg = state.config;
-  const week = state.weeks[state.currentMonday] || buildEmptyWeek();
+  // 印刷は「今週」ではなく、常に来週（週案タブで見ている週の1週間後）を基準に表示する。
+  // 印刷プレビュー内の‹›は、そこからさらに何週先/前かを独立して調整する。
+  const printMonday = addDays(state.currentMonday, 7 + 7 * (state.printWeekOffset || 0));
+  const week = state.weeks[printMonday] || buildEmptyWeek();
   const days = visibleDays(week);
   const { numbers, jointNumbers } = computeLessonNumbers(state.weeks);
 
@@ -1169,7 +1173,7 @@ function renderPrintTab() {
       const slot = week.lessons?.[d.key]?.[p];
       if (!slot?.class && !slot?.gradeWide) return `<td class="print-period-cell"></td>`;
       const isJoint = !!slot.gradeWide;
-      const num = isJoint ? jointNumbers?.[state.currentMonday]?.[d.key]?.[p] : numbers?.[state.currentMonday]?.[d.key]?.[p];
+      const num = isJoint ? jointNumbers?.[printMonday]?.[d.key]?.[p] : numbers?.[printMonday]?.[d.key]?.[p];
       const grade = isJoint ? slot.gradeWide : classGrade(cfg, slot.class);
       const displayName = isJoint ? `${slot.gradeWide}合同` : slot.class;
       const objStore = isJoint ? state.jointObjectives : state.objectives;
@@ -1187,35 +1191,16 @@ function renderPrintTab() {
 
   const combinedReflection = [week.goal, week.reflection].filter((t) => t && t.trim()).join("\n");
 
-  const nextMonday = addDays(state.currentMonday, 7);
-  const nextWeek = state.weeks[nextMonday];
-  let nextWeekLine = "";
-  if (nextWeek) {
-    const nextDays = visibleDays(nextWeek);
-    const parts = nextDays
-      .map((d, i) => {
-        const items = PERIOD_NUMS.map((p) => {
-          const slot = nextWeek.lessons?.[d.key]?.[p];
-          if (!slot || slot.skip || (!slot.class && !slot.gradeWide)) return null;
-          const label = slot.gradeWide ? `${gradeDigit(slot.gradeWide)}合` : classShortLabel(cfg, slot.class);
-          return `${p}h${label}`;
-        }).filter(Boolean);
-        return items.length ? `${d.label})${items.join("・")}` : null;
-      })
-      .filter(Boolean);
-    nextWeekLine = parts.length ? parts.join("　") : "予定はまだ入力されていません";
-  }
-
   return `
   <div class="print-toolbar no-print card">
     <div style="display:flex;align-items:center;gap:10px;">
-      <button class="nav-btn" data-role="print-nav" data-delta="-7">‹</button>
-      <span style="font-weight:700;">${formatWeekRange(state.currentMonday, week)}</span>
-      <button class="nav-btn" data-role="print-nav" data-delta="7">›</button>
+      <button class="nav-btn" data-role="print-nav" data-delta="-1">‹</button>
+      <span style="font-weight:700;">${formatWeekRange(printMonday, week)}</span>
+      <button class="nav-btn" data-role="print-nav" data-delta="1">›</button>
     </div>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.6;">
-      「印刷 / PDF出力」を押すと印刷ダイアログが開きます。送信先で <strong>PDFに保存</strong> を選ぶとPDFとして保存できます。<br/>
-      うまく開かない場合は、キーボードの <strong>Ctrl+P</strong>（Macは<strong>⌘+P</strong>）をお使いください。
+      印刷は常に「来週」を表示します。上の‹›でさらに先／前の週に切り替えられます。<br/>
+      「印刷 / PDF出力」を押すと印刷ダイアログが開きます。送信先で <strong>PDFに保存</strong> を選ぶとPDFとして保存できます（うまく開かない場合は <strong>Ctrl+P</strong> / Mac <strong>⌘+P</strong>）。
     </div>
     <button class="btn btn-primary" data-role="do-print">🖶 印刷 / PDF出力</button>
   </div>
@@ -1230,19 +1215,13 @@ function renderPrintTab() {
           .join("")}
       </div>
     </div>
-    <div style="text-align:center;font-size:11px;margin-bottom:2mm;">${formatWeekRangeShort(state.currentMonday)}</div>
+    <div style="text-align:center;font-size:11px;margin-bottom:2mm;">${formatWeekRangeShort(printMonday)}</div>
 
     <table>
       <colgroup><col style="width:6%;" />${days.map(() => `<col style="width:${94 / days.length}%;" />`).join("")}</colgroup>
-      <thead><tr><th class="print-th"></th>${days.map((d, i) => `<th class="print-th">${formatDayHeader(state.currentMonday, i)}</th>`).join("")}</tr></thead>
+      <thead><tr><th class="print-th"></th>${days.map((d, i) => `<th class="print-th">${formatDayHeader(printMonday, i)}</th>`).join("")}</tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
-
-    ${nextWeek ? `
-    <div class="print-goal-box" style="margin-top:2.5mm;padding:1.3mm 2mm;">
-      <span style="font-size:8px;font-weight:700;margin-right:2mm;">来週（${formatWeekRangeShort(nextMonday)}）</span>
-      <span class="clamp2" style="font-size:8px;">${esc(nextWeekLine)}</span>
-    </div>` : ""}
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:2.5mm;">
       <div class="print-goal-box">
@@ -1299,9 +1278,13 @@ document.getElementById("app").addEventListener("click", (e) => {
     FirebaseService.signOut();
   }
   else if (role === "tab") { state.tab = el.dataset.tab; render(); }
-  else if (role === "week-nav" || role === "print-nav") {
+  else if (role === "week-nav") {
     state.currentMonday = addDays(state.currentMonday, Number(el.dataset.delta));
     ensureWeek();
+    render();
+  }
+  else if (role === "print-nav") {
+    state.printWeekOffset = (state.printWeekOffset || 0) + Number(el.dataset.delta);
     render();
   }
   else if (role === "month-nav") {
