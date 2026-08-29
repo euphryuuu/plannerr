@@ -1187,6 +1187,25 @@ function renderPrintTab() {
 
   const combinedReflection = [week.goal, week.reflection].filter((t) => t && t.trim()).join("\n");
 
+  const nextMonday = addDays(state.currentMonday, 7);
+  const nextWeek = state.weeks[nextMonday];
+  let nextWeekLine = "";
+  if (nextWeek) {
+    const nextDays = visibleDays(nextWeek);
+    const parts = nextDays
+      .map((d, i) => {
+        const items = PERIOD_NUMS.map((p) => {
+          const slot = nextWeek.lessons?.[d.key]?.[p];
+          if (!slot || slot.skip || (!slot.class && !slot.gradeWide)) return null;
+          const label = slot.gradeWide ? `${gradeDigit(slot.gradeWide)}合` : classShortLabel(cfg, slot.class);
+          return `${p}h${label}`;
+        }).filter(Boolean);
+        return items.length ? `${d.label})${items.join("・")}` : null;
+      })
+      .filter(Boolean);
+    nextWeekLine = parts.length ? parts.join("　") : "予定はまだ入力されていません";
+  }
+
   return `
   <div class="print-toolbar no-print card">
     <div style="display:flex;align-items:center;gap:10px;">
@@ -1219,14 +1238,20 @@ function renderPrintTab() {
       <tbody>${bodyRows}</tbody>
     </table>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:4mm;">
+    ${nextWeek ? `
+    <div class="print-goal-box" style="margin-top:2.5mm;padding:1.3mm 2mm;">
+      <span style="font-size:8px;font-weight:700;margin-right:2mm;">来週（${formatWeekRangeShort(nextMonday)}）</span>
+      <span class="clamp2" style="font-size:8px;">${esc(nextWeekLine)}</span>
+    </div>` : ""}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:2.5mm;">
       <div class="print-goal-box">
         <div style="font-size:9px;font-weight:700;margin-bottom:1mm;">振り返り・目標</div>
-        <div style="font-size:9px;white-space:pre-wrap;min-height:40mm;">${esc(combinedReflection)}</div>
+        <div style="font-size:9px;white-space:pre-wrap;min-height:26mm;">${esc(combinedReflection)}</div>
       </div>
       <div class="print-goal-box">
         <div style="font-size:9px;font-weight:700;margin-bottom:1mm;">管理職からのコメント</div>
-        <div style="font-size:9px;white-space:pre-wrap;min-height:40mm;"></div>
+        <div style="font-size:9px;white-space:pre-wrap;min-height:26mm;"></div>
       </div>
     </div>
   </div>
