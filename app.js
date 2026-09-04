@@ -186,40 +186,59 @@ function buildEmptyWeek() {
 }
 function computeLessonNumbers(weeks) {
   const weekStarts = Object.keys(weeks).sort();
-  const counters = {}; // 個別クラスの回数（クラスごと）
-  const jointCounters = {}; // 学年合同の回数（学年ごと・個別クラスの回数とは完全に別カウント）
+  const counters = {}; // 個別クラスの通算回数（クラスごと）
+  const jointCounters = {}; // 学年合同の通算回数（学年ごと・個別クラスの回数とは完全に別カウント）
+  const termCounters = {}; // 個別クラスの学期内回数（学期ごとに1から数え直す）
+  const jointTermCounters = {}; // 学年合同の学期内回数
   const numbers = {};
   const jointNumbers = {};
+  const termNumbers = {};
+  const jointTermNumbers = {};
   const dateByClassNumber = {}; // { クラス名: { 回数: "YYYY-MM-DD" } }（学期での絞り込みに使用）
   const dateByGradeJointNumber = {}; // { 学年: { 合同回数: "YYYY-MM-DD" } }
   for (const ws of weekStarts) {
     const week = weeks[ws];
     numbers[ws] = {};
     jointNumbers[ws] = {};
+    termNumbers[ws] = {};
+    jointTermNumbers[ws] = {};
     ALL_DAYS.forEach((d, dayIndex) => {
       numbers[ws][d.key] = {};
       jointNumbers[ws][d.key] = {};
+      termNumbers[ws][d.key] = {};
+      jointTermNumbers[ws][d.key] = {};
       PERIOD_NUMS.forEach((p) => {
         const slot = week?.lessons?.[d.key]?.[p];
         if (!slot || slot.skip) return;
         const dateStr = addDays(ws, dayIndex);
+        const term = termOfDate(dateStr);
         if (slot.gradeWide) {
           jointCounters[slot.gradeWide] = (jointCounters[slot.gradeWide] || 0) + 1;
           const n = jointCounters[slot.gradeWide];
           jointNumbers[ws][d.key][p] = n;
+          if (term) {
+            const termKey = `${term}:${slot.gradeWide}`;
+            jointTermCounters[termKey] = (jointTermCounters[termKey] || 0) + 1;
+            jointTermNumbers[ws][d.key][p] = jointTermCounters[termKey];
+          }
           if (!dateByGradeJointNumber[slot.gradeWide]) dateByGradeJointNumber[slot.gradeWide] = {};
           dateByGradeJointNumber[slot.gradeWide][n] = dateStr;
         } else if (slot.class) {
           counters[slot.class] = (counters[slot.class] || 0) + 1;
           const n = counters[slot.class];
           numbers[ws][d.key][p] = n;
+          if (term) {
+            const termKey = `${term}:${slot.class}`;
+            termCounters[termKey] = (termCounters[termKey] || 0) + 1;
+            termNumbers[ws][d.key][p] = termCounters[termKey];
+          }
           if (!dateByClassNumber[slot.class]) dateByClassNumber[slot.class] = {};
           dateByClassNumber[slot.class][n] = dateStr;
         }
       });
     });
   }
-  return { numbers, maxByClass: counters, jointNumbers, maxJointByGrade: jointCounters, dateByClassNumber, dateByGradeJointNumber };
+  return { numbers, maxByClass: counters, jointNumbers, maxJointByGrade: jointCounters, termNumbers, jointTermNumbers, dateByClassNumber, dateByGradeJointNumber };
 }
 function computeHoursByClassAndMonth(weeks, config) {
   const result = {};
@@ -687,12 +706,15 @@ function classAndGradeWideOptions(cfg, selectedValue) {
   const other = `<option value="other" ${selectedValue === "other" ? "selected" : ""}>その他（行事・予定）</option>`;
   return `<option value="">―</option>${individual}${gradeWide ? `<optgroup label="学年合同">${gradeWide}</optgroup>` : ""}<optgroup label="予定">${other}</optgroup>`;
 }
-function renderSlotEditorInner(cfg, week, numbers, jointNumbers, dayKey, periodNum) {
+function renderSlotEditorInner(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers, dayKey, periodNum) {
   const slot = week.lessons?.[dayKey]?.[periodNum];
   const isJoint = !!slot?.gradeWide;
   const num = isJoint
     ? jointNumbers?.[state.currentMonday]?.[dayKey]?.[periodNum]
     : numbers?.[state.currentMonday]?.[dayKey]?.[periodNum];
+  const termNum = isJoint
+    ? jointTermNumbers?.[state.currentMonday]?.[dayKey]?.[periodNum]
+    : termNumbers?.[state.currentMonday]?.[dayKey]?.[periodNum];
   const grade = isJoint ? slot.gradeWide : slot?.class ? classGrade(cfg, slot.class) : null;
   const objStore = isJoint ? state.jointObjectives : state.objectives;
   const objText = grade ? objStore?.[grade]?.[num]?.text : "";
@@ -709,11 +731,15 @@ function renderSlotEditorInner(cfg, week, numbers, jointNumbers, dayKey, periodN
     detail = `<textarea class="textarea" rows="3" placeholder="行事・予定など" data-role="slot-content" data-day="${dayKey}" data-period="${periodNum}">${esc(slot.content || "")}</textarea>`;
   } else if (slot?.class || slot?.gradeWide) {
     const badgeLabel = num ? (isJoint ? `合${circled(num)}` : circled(num)) : "-";
+    const termBadgeLabel = termNum ? circled(termNum) : "";
     const curFraction = slot.hourFraction ?? 1;
     const gradeClass = grade ? `grade-${String(grade).replace("年", "")}` : "";
     detail = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <span class="badge-circle ${gradeClass} ${slot.skip ? "skip" : ""} ${isJoint ? "joint" : ""}" title="${isJoint ? "学年合同の回数（個別クラスの回数とは別カウント）" : "授業回数"}">${badgeLabel}</span>
+        <span style="display:inline-flex;align-items:center;gap:2px;">
+          <span class="badge-circle ${gradeClass} ${slot.skip ? "skip" : ""} ${isJoint ? "joint" : ""}" title="${isJoint ? "学年合同の通算回数（個別クラスの回数とは別カウント）" : "通算の授業回数"}">${badgeLabel}</span>
+          ${termBadgeLabel ? `<span class="badge-circle ${gradeClass} ${slot.skip ? "skip" : ""} ${isJoint ? "joint" : ""}" title="この学期の授業回数">${termBadgeLabel}</span>` : ""}
+        </span>
         <label style="font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:4px;">
           <input type="checkbox" data-role="slot-skip" data-day="${dayKey}" data-period="${periodNum}" ${slot.skip ? "checked" : ""} /> 実施しない
         </label>
@@ -741,9 +767,11 @@ function shortMD(dateStr) {
 function renderWeeklyTab() {
   const cfg = state.config;
   const week = state.weeks[state.currentMonday] || buildEmptyWeek();
-  const { numbers, jointNumbers } = computeLessonNumbers(state.weeks);
+  const { numbers, jointNumbers, termNumbers, jointTermNumbers } = computeLessonNumbers(state.weeks);
 
-  const gridSection = isNarrow() ? renderWeeklyMobile(cfg, week, numbers, jointNumbers) : renderWeeklyDesktop(cfg, week, numbers, jointNumbers);
+  const gridSection = isNarrow()
+    ? renderWeeklyMobile(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers)
+    : renderWeeklyDesktop(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers);
 
   const noClassNotice = cfg.classes.length === 0 ? `<div class="card" style="color:var(--muted2);font-size:14px;">「設定」タブでまず担当クラスと固定時間割を登録してください。</div>` : "";
 
@@ -778,7 +806,7 @@ function renderWeeklyTab() {
     </div>
   </section>`;
 }
-function renderWeeklyDesktop(cfg, week, numbers, jointNumbers) {
+function renderWeeklyDesktop(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers) {
   const days = visibleDays(week);
   const gridRows = ROWS.map((row) => {
     if (row.type === "break") {
@@ -789,7 +817,7 @@ function renderWeeklyDesktop(cfg, week, numbers, jointNumbers) {
       ).join("");
       return `<tr class="break"><td class="row-label">${row.label}</td>${cells}</tr>`;
     }
-    const cells = days.map((d) => `<td style="vertical-align:top;min-width:160px;">${renderSlotEditorInner(cfg, week, numbers, jointNumbers, d.key, row.num)}</td>`).join("");
+    const cells = days.map((d) => `<td style="vertical-align:top;min-width:160px;">${renderSlotEditorInner(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers, d.key, row.num)}</td>`).join("");
     return `<tr><td class="row-label">${row.num}</td>${cells}</tr>`;
   }).join("");
   const headerCells = days
@@ -803,7 +831,7 @@ function renderWeeklyDesktop(cfg, week, numbers, jointNumbers) {
     </table>
   </section>`;
 }
-function renderWeeklyMobile(cfg, week, numbers, jointNumbers) {
+function renderWeeklyMobile(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers) {
   const days = visibleDays(week);
   const day = days.find((d) => d.key === state.ui.weekDay) ? state.ui.weekDay : "mon";
   const rowsHtml = ROWS.map((row) => {
@@ -817,7 +845,7 @@ function renderWeeklyMobile(cfg, week, numbers, jointNumbers) {
     return `
     <div class="mobile-period-card">
       <div class="mobile-period-label">${row.num}時間目</div>
-      ${renderSlotEditorInner(cfg, week, numbers, jointNumbers, day, row.num)}
+      ${renderSlotEditorInner(cfg, week, numbers, jointNumbers, termNumbers, jointTermNumbers, day, row.num)}
     </div>`;
   }).join("");
   const dayTabs = days
