@@ -684,7 +684,8 @@ function classAndGradeWideOptions(cfg, selectedValue) {
   const gradeWide = gradesPresent
     .map((g) => `<option value="grade:${esc(g)}" ${selectedValue === `grade:${g}` ? "selected" : ""}>🎵 ${esc(g)}合同（全クラス）</option>`)
     .join("");
-  return `<option value="">―</option>${individual}${gradeWide ? `<optgroup label="学年合同">${gradeWide}</optgroup>` : ""}`;
+  const other = `<option value="other" ${selectedValue === "other" ? "selected" : ""}>その他（行事・予定）</option>`;
+  return `<option value="">―</option>${individual}${gradeWide ? `<optgroup label="学年合同">${gradeWide}</optgroup>` : ""}<optgroup label="予定">${other}</optgroup>`;
 }
 function renderSlotEditorInner(cfg, week, numbers, jointNumbers, dayKey, periodNum) {
   const slot = week.lessons?.[dayKey]?.[periodNum];
@@ -696,7 +697,7 @@ function renderSlotEditorInner(cfg, week, numbers, jointNumbers, dayKey, periodN
   const objStore = isJoint ? state.jointObjectives : state.objectives;
   const objText = grade ? objStore?.[grade]?.[num]?.text : "";
   const objPersp = grade ? objStore?.[grade]?.[num]?.perspective : "";
-  const selectedValue = slot?.gradeWide ? `grade:${slot.gradeWide}` : slot?.class ? `cls:${slot.class}` : "";
+  const selectedValue = slot?.other ? "other" : slot?.gradeWide ? `grade:${slot.gradeWide}` : slot?.class ? `cls:${slot.class}` : "";
 
   const classSelect = `
     <select class="select" style="margin-bottom:6px;font-weight:600;" data-role="slot-class" data-day="${dayKey}" data-period="${periodNum}">
@@ -704,12 +705,15 @@ function renderSlotEditorInner(cfg, week, numbers, jointNumbers, dayKey, periodN
     </select>`;
 
   let detail = "";
-  if (slot?.class || slot?.gradeWide) {
+  if (slot?.other) {
+    detail = `<textarea class="textarea" rows="3" placeholder="行事・予定など" data-role="slot-content" data-day="${dayKey}" data-period="${periodNum}">${esc(slot.content || "")}</textarea>`;
+  } else if (slot?.class || slot?.gradeWide) {
     const badgeLabel = num ? (isJoint ? `合${circled(num)}` : circled(num)) : "-";
     const curFraction = slot.hourFraction ?? 1;
+    const gradeClass = grade ? `grade-${String(grade).replace("年", "")}` : "";
     detail = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <span class="badge-circle ${slot.skip ? "skip" : ""} ${isJoint ? "joint" : ""}" title="${isJoint ? "学年合同の回数（個別クラスの回数とは別カウント）" : "授業回数"}">${badgeLabel}</span>
+        <span class="badge-circle ${gradeClass} ${slot.skip ? "skip" : ""} ${isJoint ? "joint" : ""}" title="${isJoint ? "学年合同の回数（個別クラスの回数とは別カウント）" : "授業回数"}">${badgeLabel}</span>
         <label style="font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:4px;">
           <input type="checkbox" data-role="slot-skip" data-day="${dayKey}" data-period="${periodNum}" ${slot.skip ? "checked" : ""} /> 実施しない
         </label>
@@ -1117,9 +1121,10 @@ function renderMonthTab() {
       const rowCls = jsDay === 0 ? "month-sun" : jsDay === 6 ? "month-sat" : "";
       const cells = PERIOD_NUMS.map((p) => {
         const slot = lessonAtDate(dateStr, p);
-        if (!slot || (!slot.class && !slot.gradeWide) || slot.skip) return `<td class="${rowCls}"></td>`;
-        const label = slot.gradeWide ? `${gradeDigit(slot.gradeWide)}合` : classShortLabel(cfg, slot.class);
-        return `<td class="${rowCls}" style="font-weight:600;" title="${slot.gradeWide ? esc(`${slot.gradeWide}合同`) : esc(slot.class)}">${esc(label)}</td>`;
+        if (!slot || (!slot.class && !slot.gradeWide && !slot.other) || slot.skip) return `<td class="${rowCls}"></td>`;
+        const label = slot.other ? "他" : slot.gradeWide ? `${gradeDigit(slot.gradeWide)}合` : classShortLabel(cfg, slot.class);
+        const title = slot.other ? (slot.content || "その他") : slot.gradeWide ? `${slot.gradeWide}合同` : slot.class;
+        return `<td class="${rowCls}" style="font-weight:600;" title="${esc(title)}">${esc(label)}</td>`;
       }).join("");
       return `<tr><td class="row-label ${rowCls}">${d}<span style="font-weight:400;font-size:9px;margin-left:2px;">(${kanji})</span></td>${cells}</tr>`;
     })
@@ -1171,7 +1176,13 @@ function renderPrintTab() {
     const p = row.num;
     const cells = days.map((d) => {
       const slot = week.lessons?.[d.key]?.[p];
-      if (!slot?.class && !slot?.gradeWide) return `<td class="print-period-cell"></td>`;
+      if (!slot?.class && !slot?.gradeWide && !slot?.other) return `<td class="print-period-cell"></td>`;
+      if (slot.other) {
+        return `<td class="print-period-cell">
+          <div class="print-lesson-line1">その他</div>
+          <div class="clamp2 print-lesson-line2">${esc(slot.content || "")}</div>
+        </td>`;
+      }
       const isJoint = !!slot.gradeWide;
       const num = isJoint ? jointNumbers?.[printMonday]?.[d.key]?.[p] : numbers?.[printMonday]?.[d.key]?.[p];
       const grade = isJoint ? slot.gradeWide : classGrade(cfg, slot.class);
@@ -1348,10 +1359,12 @@ document.getElementById("app").addEventListener("change", (e) => {
       const existing = w.lessons[day][period] || { content: "", skip: false, skipReason: "", hourFraction: 1 };
       if (!el.value) {
         w.lessons[day][period] = null;
+      } else if (el.value === "other") {
+        w.lessons[day][period] = { ...existing, class: null, gradeWide: null, other: true, skip: false, hourFraction: 1 };
       } else if (el.value.startsWith("grade:")) {
-        w.lessons[day][period] = { ...existing, class: null, gradeWide: el.value.slice(6), skip: false, hourFraction: existing.hourFraction ?? 1 };
+        w.lessons[day][period] = { ...existing, class: null, gradeWide: el.value.slice(6), other: false, skip: false, hourFraction: existing.hourFraction ?? 1 };
       } else if (el.value.startsWith("cls:")) {
-        w.lessons[day][period] = { ...existing, class: el.value.slice(4), gradeWide: null, skip: false, hourFraction: existing.hourFraction ?? 1 };
+        w.lessons[day][period] = { ...existing, class: el.value.slice(4), gradeWide: null, other: false, skip: false, hourFraction: existing.hourFraction ?? 1 };
       }
       markDirty();
       render();

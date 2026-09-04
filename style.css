@@ -70,6 +70,13 @@ tr.break td{ background:var(--paper-dark); color:var(--muted2); text-align:cente
 }
 .badge-circle.skip{ background:#E4DFD2; color:var(--muted2); }
 .badge-circle.joint{ background:#4A6FA5; }
+.badge-circle.grade-1{ background:#D96C6C; }
+.badge-circle.grade-2{ background:#D98A4B; }
+.badge-circle.grade-3{ background:#B79A3D; }
+.badge-circle.grade-4{ background:#4F8F63; }
+.badge-circle.grade-5{ background:#4A79A8; }
+.badge-circle.grade-6{ background:#765AA6; }
+.badge-circle.skip{ background:#E4DFD2; color:var(--muted2); }
 
 .obj-preview{ font-size:11px; background:var(--paper-dark); border:1px dashed var(--line); border-radius:6px; padding:5px 7px; min-height:30px; color:var(--muted2); }
 .obj-preview.has-text{ color:var(--ink); }
